@@ -23,10 +23,23 @@ def get_string_struct(line):
 
     return data[2].replace('"', '')[:-1]
 
+def get_struct_name(line):
+    data = line.split()
+
+    # data[0] -> static
+    # data[1] -> BlockDriver
+    # data[2] -> struct name
+
+    if data[0] != 'static' or data[1] != 'BlockDriver':
+        print("Unexpected struct format in line:\n" + line, file=sys.stderr)
+        sys.exit(1)
+    return data[2]
+
 def add_module(fheader, library, format_name, protocol_name,
-                probe, probe_device):
+                probe, probe_device, driver_name):
     lines = []
     lines.append('.library_name = "' + library + '",')
+    lines.append('.driver_name = "' + driver_name + '",')
     if format_name != "":
         lines.append('.format_name = "' + format_name + '",')
     if protocol_name != "":
@@ -58,7 +71,7 @@ def process_file(fheader, filename):
                     probe_device = True
                 elif line == "};":
                     add_module(fheader, library, format_name, protocol_name,
-                                probe, probe_device)
+                                probe, probe_device, driver_name)
                     found_start = False
             elif line.find("static BlockDriver") != -1:
                 found_something = True
@@ -67,6 +80,7 @@ def process_file(fheader, filename):
                 protocol_name = ""
                 probe = False
                 probe_device = False
+                driver_name = get_struct_name(line)
 
         if not found_something:
             print("No BlockDriver struct found in " + filename + ". \
@@ -95,13 +109,15 @@ def print_top(fheader):
 
 #include "qemu-common.h"
 
-static const struct {
+typedef struct bdrv_module_specs {
     const char *format_name;
     const char *protocol_name;
     const char *library_name;
+    const char *driver_name;
     bool has_probe;
     bool has_probe_device;
-} block_driver_modules[] = {''')
+} bdrv_module_specs;
+static const bdrv_module_specs block_driver_modules[] = {''')
 
 def print_bottom(fheader):
     fheader.write('''

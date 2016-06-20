@@ -15,9 +15,8 @@
 
 #include "qemu/osdep.h"
 #include "qemu-common.h"
-#ifdef CONFIG_MODULES
 #include <gmodule.h>
-#endif
+#include "qapi/error.h"
 #include "qemu/queue.h"
 #include "qemu/module.h"
 
@@ -104,7 +103,7 @@ void module_call_init(module_init_type type)
 }
 
 #ifdef CONFIG_MODULES
-static int module_load_file(const char *fname)
+static GModule *module_load_file(const char *fname, Error **errp)
 {
     GModule *g_module;
     void (*sym)(void);
@@ -112,66 +111,61 @@ static int module_load_file(const char *fname)
     int len = strlen(fname);
     int suf_len = strlen(dsosuf);
     ModuleEntry *e, *next;
-    int ret;
 
     if (len <= suf_len || strcmp(&fname[len - suf_len], dsosuf)) {
-        /* wrong suffix */
-        ret = -EINVAL;
-        goto out;
+        error_setg(errp, "Module has wrong suffix\n");
+        return NULL;
     }
     if (access(fname, F_OK)) {
-        ret = -ENOENT;
-        goto out;
+        error_setg(errp, "Module does not exist\n");
+        return NULL;
     }
 
     assert(QTAILQ_EMPTY(&dso_init_list));
 
     g_module = g_module_open(fname, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);
     if (!g_module) {
-        fprintf(stderr, "Failed to open module: %s\n",
-                g_module_error());
-        ret = -EINVAL;
-        goto out;
+        error_setg(errp, "Failed to open module: %s\n", g_module_error());
+        return NULL;
     }
     if (!g_module_symbol(g_module, DSO_STAMP_FUN_STR, (gpointer *)&sym)) {
-        fprintf(stderr, "Failed to initialize module: %s\n",
-                fname);
+        error_setg(errp, "Failed to initialize module: %s\n", fname);
         /* Print some info if this is a QEMU module (but from different build),
          * this will make debugging user problems easier. */
         if (g_module_symbol(g_module, "qemu_module_dummy", (gpointer *)&sym)) {
-            fprintf(stderr,
-                    "Note: only modules from the same build can be loaded.\n");
+            error_append_hint(errp, "Note: only modules from the same build \
+                              can be loaded.\n");
         }
         g_module_close(g_module);
-        ret = -EINVAL;
+        g_module = NULL;
     } else {
         QTAILQ_FOREACH(e, &dso_init_list, node) {
             register_module_init(e->init, e->type);
         }
-        ret = 0;
     }
 
     QTAILQ_FOREACH_SAFE(e, &dso_init_list, node, next) {
         QTAILQ_REMOVE(&dso_init_list, e, node);
         g_free(e);
     }
-out:
-    return ret;
+
+    return g_module;
 }
 #endif
 
-void module_load_one(const char *prefix, const char *lib_name)
+GModule *module_load_one(const char *prefix, const char *lib_name)
 {
 #ifdef CONFIG_MODULES
+    Error *local_err = NULL;
+    GModule *g_module = NULL;
     char *fname = NULL;
     char *exec_dir;
     char *dirs[3];
     int i = 0;
-    int ret;
 
     if (!g_module_supported()) {
         fprintf(stderr, "Module is not supported by system.\n");
-        return;
+        return NULL;
     }
 
     exec_dir = qemu_get_exec_dir();
@@ -185,18 +179,23 @@ void module_load_one(const char *prefix, const char *lib_name)
     for (i = 0; i < ARRAY_SIZE(dirs); i++) {
         fname = g_strdup_printf("%s/%s%s%s",
                 dirs[i], prefix, lib_name, HOST_DSOSUF);
-        ret = module_load_file(fname);
+        g_module = module_load_file(fname, &local_err);
         g_free(fname);
         fname = NULL;
         /* Try loading until loaded a module file */
-        if (!ret) {
+        if (!local_err) {
             break;
         }
+        error_free(local_err);
+        local_err = NULL;
     }
 
     for (i = 0; i < ARRAY_SIZE(dirs); i++) {
         g_free(dirs[i]);
     }
 
+    return g_module;
+#else
+    return NULL;
 #endif
 }

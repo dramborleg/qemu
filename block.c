@@ -54,6 +54,10 @@
 #include <windows.h>
 #endif
 
+#ifdef CONFIG_MODULES
+#include <gmodule.h>
+#endif
+
 #define NOT_DONE 0x7fffffff /* used while emulated sync operation in progress */
 
 static QTAILQ_HEAD(, BlockDriverState) graph_bdrv_states =
@@ -240,6 +244,26 @@ BlockDriverState *bdrv_new(void)
     return bs;
 }
 
+BlockDriver *request_block_driver(const bdrv_module_specs *driver)
+{
+#ifdef CONFIG_MODULES
+    BlockDriver *ret = NULL;
+
+    g_assert(driver);
+    GModule *g_module = module_load_one("block-", driver->library_name);
+    if (g_module) {
+        if (!g_module_symbol(g_module, driver->driver_name, (gpointer *)&ret)) {
+            fprintf(stderr, "Failed to find driver in module\n");
+            return NULL;
+        }
+    }
+
+    return ret;
+#else
+    return NULL;
+#endif
+}
+
 BlockDriver *bdrv_find_format(const char *format_name)
 {
     BlockDriver *drv1;
@@ -253,15 +277,9 @@ BlockDriver *bdrv_find_format(const char *format_name)
 
     for (i = 0; i < ARRAY_SIZE(block_driver_modules); ++i) {
         if (!strcmp(block_driver_modules[i].format_name, format_name)) {
-            block_module_load_one(block_driver_modules[i].library_name);
-            /* Copying code is not nice, but this way the current discovery is
-             * not modified. Calling recursively could fail if the library
-             * has been deleted.
-             */
-            QLIST_FOREACH(drv1, &bdrv_drivers, list) {
-                if (!strcmp(drv1->format_name, format_name)) {
-                    return drv1;
-                }
+            drv1 = request_block_driver(&block_driver_modules[i]);
+            if (drv1) {
+                return drv1;
             }
         }
     }
@@ -534,16 +552,9 @@ BlockDriver *bdrv_find_protocol(const char *filename,
     for (i = 0; i < ARRAY_SIZE(block_driver_modules); ++i) {
         if (block_driver_modules[i].protocol_name &&
             !strcmp(block_driver_modules[i].protocol_name, protocol)) {
-            block_module_load_one(block_driver_modules[i].library_name);
-            /* Copying code is not nice, but this way the current discovery is
-             * not modified. Calling recursively could fail if the library
-             * has been deleted.
-             */
-            QLIST_FOREACH(drv1, &bdrv_drivers, list) {
-                if (drv1->protocol_name &&
-                    !strcmp(drv1->protocol_name, protocol)) {
-                    return drv1;
-                }
+            drv1 = request_block_driver(&block_driver_modules[i]);
+            if (drv1) {
+                return drv1;
             }
         }
     }

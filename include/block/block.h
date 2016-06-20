@@ -10,6 +10,7 @@
 #include "qapi/qmp/qobject.h"
 #include "qapi-types.h"
 #include "qemu/hbitmap.h"
+#include "qemu/module_block.h"
 
 /* block.c */
 typedef struct BlockDriver BlockDriver;
@@ -193,6 +194,7 @@ bool bdrv_uses_whitelist(void);
 BlockDriver *bdrv_find_protocol(const char *filename,
                                 bool allow_protocol_prefix,
                                 Error **errp);
+BlockDriver *request_block_driver(const bdrv_module_specs *driver);
 BlockDriver *bdrv_find_format(const char *format_name);
 int bdrv_create(BlockDriver *drv, const char* filename,
                 QemuOpts *opts, Error **errp);
