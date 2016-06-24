@@ -3041,7 +3041,9 @@ int main(int argc, char **argv, char **envp)
     qemu_add_opts(&qemu_icount_opts);
     qemu_add_opts(&qemu_semihosting_config_opts);
     qemu_add_opts(&qemu_fw_cfg_opts);
+#ifdef CONFIG_LIBISCSI
     qemu_add_opts(&qemu_iscsi_opts);
+#endif
     module_call_init(MODULE_INIT_OPTS);
 
     runstate_init();
