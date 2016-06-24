@@ -2,7 +2,7 @@
 #
 # Module information generator
 #
-# Copyright Red Hat, Inc. 2015
+# Copyright Red Hat, Inc. 2015 - 2016
 #
 # Authors:
 #  Marc Mari <markmb@redhat.com>
@@ -92,7 +92,7 @@ def print_top(fheader):
 /*
  * QEMU Block Module Infrastructure
  *
- * Copyright Red Hat, Inc. 2015
+ * Copyright Red Hat, Inc. 2015 - 2016
  *
  * Authors:
  *  Marc Mari       <markmb@redhat.com>
@@ -128,14 +128,13 @@ def print_bottom(fheader):
 
 # First argument: output folder
 # All other arguments: modules source files (.c)
-output_dir = sys.argv[1]
+output_file = sys.argv[1]
+output_dir, _ = os.path.split(output_file)
 if not os.path.isdir(output_dir):
     print("Folder " + output_dir + " does not exist", file=sys.stderr)
     sys.exit(1)
 
-path = output_dir + 'module_block.h'
-
-with open(path, 'w') as fheader:
+with open(output_file, 'w') as fheader:
     print_top(fheader)
 
     for filename in sys.argv[2:]:
