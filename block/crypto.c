@@ -41,19 +41,6 @@ struct BlockCrypto {
 };
 
 
-static int block_crypto_probe_generic(QCryptoBlockFormat format,
-                                      const uint8_t *buf,
-                                      int buf_size,
-                                      const char *filename)
-{
-    if (qcrypto_block_has_format(format, buf, buf_size)) {
-        return 100;
-    } else {
-        return 0;
-    }
-}
-
-
 static ssize_t block_crypto_read_func(QCryptoBlock *block,
                                       size_t offset,
                                       uint8_t *buf,
@@ -540,13 +527,6 @@ static int64_t block_crypto_getlength(BlockDriverState *bs)
 }
 
 
-static int block_crypto_probe_luks(const uint8_t *buf,
-                                   int buf_size,
-                                   const char *filename) {
-    return block_crypto_probe_generic(Q_CRYPTO_BLOCK_FORMAT_LUKS,
-                                      buf, buf_size, filename);
-}
-
 static int block_crypto_open_luks(BlockDriverState *bs,
                                   QDict *options,
                                   int flags,
@@ -568,7 +548,6 @@ static int block_crypto_create_luks(const char *filename,
 BlockDriver bdrv_crypto_luks = {
     .format_name        = "luks",
     .instance_size      = sizeof(BlockCrypto),
-    .bdrv_probe         = block_crypto_probe_luks,
     .bdrv_open          = block_crypto_open_luks,
     .bdrv_close         = block_crypto_close,
     .bdrv_create        = block_crypto_create_luks,

@@ -179,13 +179,6 @@ static uint32_t vpc_checksum(uint8_t* buf, size_t size)
 }
 
 
-static int vpc_probe(const uint8_t *buf, int buf_size, const char *filename)
-{
-    if (buf_size >= 8 && !strncmp((char *)buf, "conectix", 8))
-	return 100;
-    return 0;
-}
-
 static void vpc_parse_options(BlockDriverState *bs, QemuOpts *opts,
                               Error **errp)
 {
@@ -1056,7 +1049,6 @@ static BlockDriver bdrv_vpc = {
     .format_name    = "vpc",
     .instance_size  = sizeof(BDRVVPCState),
 
-    .bdrv_probe             = vpc_probe,
     .bdrv_open              = vpc_open,
     .bdrv_close             = vpc_close,
     .bdrv_reopen_prepare    = vpc_reopen_prepare,

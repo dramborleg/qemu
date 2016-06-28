@@ -119,7 +119,7 @@ int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size,
     BLKDBG_EVENT(bs->file, BLKDBG_L1_GROW_ACTIVATE_TABLE);
     cpu_to_be32w((uint32_t*)data, new_l1_size);
     stq_be_p(data + 4, new_l1_table_offset);
-    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCowHeader, l1_size),
+    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCow2Header, l1_size),
                            data, sizeof(data));
     if (ret < 0) {
         goto fail;

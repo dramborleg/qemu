@@ -225,14 +225,6 @@ static void raw_close(BlockDriverState *bs)
 {
 }
 
-static int raw_probe(const uint8_t *buf, int buf_size, const char *filename)
-{
-    /* smallest possible positive score so that raw is used if and only if no
-     * other block driver works
-     */
-    return 1;
-}
-
 static int raw_probe_blocksizes(BlockDriverState *bs, BlockSizes *bsz)
 {
     return bdrv_probe_blocksizes(bs->file->bs, bsz);
@@ -245,7 +237,6 @@ static int raw_probe_geometry(BlockDriverState *bs, HDGeometry *geo)
 
 BlockDriver bdrv_raw = {
     .format_name          = "raw",
-    .bdrv_probe           = &raw_probe,
     .bdrv_reopen_prepare  = &raw_reopen_prepare,
     .bdrv_open            = &raw_open,
     .bdrv_close           = &raw_close,

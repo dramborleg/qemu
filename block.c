@@ -23,6 +23,7 @@
  */
 #include "qemu/osdep.h"
 #include "trace.h"
+#include "block/probe.h"
 #include "block/block_int.h"
 #include "block/blockjob.h"
 #include "qemu/error-report.h"
@@ -55,6 +56,22 @@
 #endif
 
 #define NOT_DONE 0x7fffffff /* used while emulated sync operation in progress */
+
+static BdrvProbeFunc *format_probes[] = {
+    bochs_probe,
+    cloop_probe,
+    block_crypto_probe_luks,
+    dmg_probe,
+    parallels_probe,
+    qcow_probe,
+    qcow2_probe,
+    bdrv_qed_probe,
+    raw_probe,
+    vdi_probe,
+    vhdx_probe,
+    vmdk_probe,
+    vpc_probe
+};
 
 static QTAILQ_HEAD(, BlockDriverState) graph_bdrv_states =
     QTAILQ_HEAD_INITIALIZER(graph_bdrv_states);
@@ -580,26 +597,19 @@ BlockDriver *bdrv_probe_all(const uint8_t *buf, int buf_size,
                             const char *filename)
 {
     int score_max = 0, score;
+    const char *format_max = NULL;
+    const char *format;
     size_t i;
-    BlockDriver *drv = NULL, *d;
 
-    for (i = 0; i < ARRAY_SIZE(block_driver_modules); ++i) {
-        if (block_driver_modules[i].has_probe) {
-            block_module_load_one(block_driver_modules[i].library_name);
+    for (i = 0; i < ARRAY_SIZE(format_probes); i++) {
+        format = format_probes[i](buf, buf_size, filename, &score);
+        if (score > score_max) {
+            score_max = score;
+            format_max = format;
         }
     }
 
-    QLIST_FOREACH(d, &bdrv_drivers, list) {
-        if (d->bdrv_probe) {
-            score = d->bdrv_probe(buf, buf_size, filename);
-            if (score > score_max) {
-                score_max = score;
-                drv = d;
-            }
-        }
-    }
-
-    return drv;
+    return bdrv_find_format(format_max);
 }
 
 static int find_image_format(BlockDriverState *bs, const char *filename,

@@ -26,20 +26,6 @@ static const AIOCBInfo qed_aiocb_info = {
     .aiocb_size         = sizeof(QEDAIOCB),
 };
 
-static int bdrv_qed_probe(const uint8_t *buf, int buf_size,
-                          const char *filename)
-{
-    const QEDHeader *header = (const QEDHeader *)buf;
-
-    if (buf_size < sizeof(*header)) {
-        return 0;
-    }
-    if (le32_to_cpu(header->magic) != QED_MAGIC) {
-        return 0;
-    }
-    return 100;
-}
-
 /**
  * Check whether an image format is raw
  *
@@ -1651,7 +1637,6 @@ static BlockDriver bdrv_qed = {
     .create_opts              = &qed_create_opts,
     .supports_backing         = true,
 
-    .bdrv_probe               = bdrv_qed_probe,
     .bdrv_open                = bdrv_qed_open,
     .bdrv_close               = bdrv_qed_close,
     .bdrv_reopen_prepare      = bdrv_qed_reopen_prepare,

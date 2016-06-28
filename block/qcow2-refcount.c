@@ -569,7 +569,7 @@ static int alloc_refcount_block(BlockDriverState *bs,
     cpu_to_be32w(&data.d32, table_clusters);
     BLKDBG_EVENT(bs->file, BLKDBG_REFBLOCK_ALLOC_SWITCH_TABLE);
     ret = bdrv_pwrite_sync(bs->file->bs,
-                           offsetof(QCowHeader, refcount_table_offset),
+                           offsetof(QCow2Header, refcount_table_offset),
                            &data, sizeof(data));
     if (ret < 0) {
         goto fail_table;
@@ -2162,7 +2162,7 @@ write_refblocks:
                  reftable_offset);
     cpu_to_be32w(&reftable_offset_and_clusters.reftable_clusters,
                  size_to_clusters(s, reftable_size * sizeof(uint64_t)));
-    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCowHeader,
+    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCow2Header,
                                                   refcount_table_offset),
                            &reftable_offset_and_clusters,
                            sizeof(reftable_offset_and_clusters));

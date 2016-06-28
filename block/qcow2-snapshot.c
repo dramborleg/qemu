@@ -251,13 +251,13 @@ static int qcow2_write_snapshots(BlockDriverState *bs)
         goto fail;
     }
 
-    QEMU_BUILD_BUG_ON(offsetof(QCowHeader, snapshots_offset) !=
-        offsetof(QCowHeader, nb_snapshots) + sizeof(header_data.nb_snapshots));
+    QEMU_BUILD_BUG_ON(offsetof(QCow2Header, snapshots_offset) !=
+        offsetof(QCow2Header, nb_snapshots) + sizeof(header_data.nb_snapshots));
 
     header_data.nb_snapshots        = cpu_to_be32(s->nb_snapshots);
     header_data.snapshots_offset    = cpu_to_be64(snapshots_offset);
 
-    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCowHeader, nb_snapshots),
+    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCow2Header, nb_snapshots),
                            &header_data, sizeof(header_data));
     if (ret < 0) {
         goto fail;

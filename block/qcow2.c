@@ -64,18 +64,6 @@ typedef struct {
 #define  QCOW2_EXT_MAGIC_BACKING_FORMAT 0xE2792ACA
 #define  QCOW2_EXT_MAGIC_FEATURE_TABLE 0x6803f857
 
-static int qcow2_probe(const uint8_t *buf, int buf_size, const char *filename)
-{
-    const QCowHeader *cow_header = (const void *)buf;
-
-    if (buf_size >= sizeof(QCowHeader) &&
-        be32_to_cpu(cow_header->magic) == QCOW_MAGIC &&
-        be32_to_cpu(cow_header->version) >= 2)
-        return 100;
-    else
-        return 0;
-}
-
 
 /* 
  * read qcow2 extension and fill bs
@@ -249,7 +237,8 @@ int qcow2_mark_dirty(BlockDriverState *bs)
     }
 
     val = cpu_to_be64(s->incompatible_features | QCOW2_INCOMPAT_DIRTY);
-    ret = bdrv_pwrite(bs->file->bs, offsetof(QCowHeader, incompatible_features),
+    ret = bdrv_pwrite(bs->file->bs,
+                      offsetof(QCow2Header, incompatible_features),
                       &val, sizeof(val));
     if (ret < 0) {
         return ret;
@@ -812,7 +801,7 @@ static int qcow2_open(BlockDriverState *bs, QDict *options, int flags,
     BDRVQcow2State *s = bs->opaque;
     unsigned int len, i;
     int ret = 0;
-    QCowHeader header;
+    QCow2Header header;
     Error *local_err = NULL;
     uint64_t ext_end;
     uint64_t l1_vm_state_index;
@@ -836,7 +825,7 @@ static int qcow2_open(BlockDriverState *bs, QDict *options, int flags,
     be64_to_cpus(&header.snapshots_offset);
     be32_to_cpus(&header.nb_snapshots);
 
-    if (header.magic != QCOW_MAGIC) {
+    if (header.magic != QCOW2_MAGIC) {
         error_setg(errp, "Image is not in qcow2 format");
         ret = -EINVAL;
         goto fail;
@@ -1808,7 +1797,7 @@ static size_t header_ext_add(char *buf, uint32_t magic, const void *s,
 int qcow2_update_header(BlockDriverState *bs)
 {
     BDRVQcow2State *s = bs->opaque;
-    QCowHeader *header;
+    QCow2Header *header;
     char *buf;
     size_t buflen = s->cluster_size;
     int ret;
@@ -1820,7 +1809,7 @@ int qcow2_update_header(BlockDriverState *bs)
     buf = qemu_blockalign(bs, buflen);
 
     /* Header structure */
-    header = (QCowHeader*) buf;
+    header = (QCow2Header *) buf;
 
     if (buflen < sizeof(*header)) {
         ret = -ENOSPC;
@@ -1831,9 +1820,9 @@ int qcow2_update_header(BlockDriverState *bs)
     total_size = bs->total_sectors * BDRV_SECTOR_SIZE;
     refcount_table_clusters = s->refcount_table_size >> (s->cluster_bits - 3);
 
-    *header = (QCowHeader) {
+    *header = (QCow2Header) {
         /* Version 2 fields */
-        .magic                  = cpu_to_be32(QCOW_MAGIC),
+        .magic                  = cpu_to_be32(QCOW2_MAGIC),
         .version                = cpu_to_be32(s->qcow_version),
         .backing_file_offset    = 0,
         .backing_file_size      = 0,
@@ -1858,7 +1847,7 @@ int qcow2_update_header(BlockDriverState *bs)
     /* For older versions, write a shorter header */
     switch (s->qcow_version) {
     case 2:
-        ret = offsetof(QCowHeader, incompatible_features);
+        ret = offsetof(QCow2Header, incompatible_features);
         break;
     case 3:
         ret = sizeof(*header);
@@ -2091,7 +2080,7 @@ static int qcow2_create2(const char *filename, int64_t total_size,
      * size for any qcow2 image.
      */
     BlockBackend *blk;
-    QCowHeader *header;
+    QCow2Header *header;
     uint64_t* refcount_table;
     Error *local_err = NULL;
     int ret;
@@ -2177,8 +2166,8 @@ static int qcow2_create2(const char *filename, int64_t total_size,
     /* Write the header */
     QEMU_BUILD_BUG_ON((1 << MIN_CLUSTER_BITS) < sizeof(*header));
     header = g_malloc0(cluster_size);
-    *header = (QCowHeader) {
-        .magic                      = cpu_to_be32(QCOW_MAGIC),
+    *header = (QCow2Header) {
+        .magic                      = cpu_to_be32(QCOW2_MAGIC),
         .version                    = cpu_to_be32(version),
         .cluster_bits               = cpu_to_be32(cluster_bits),
         .size                       = cpu_to_be64(0),
@@ -2515,7 +2504,7 @@ static int qcow2_truncate(BlockDriverState *bs, int64_t offset)
 
     /* write updated header.size */
     offset = cpu_to_be64(offset);
-    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCowHeader, size),
+    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCow2Header, size),
                            &offset, sizeof(uint64_t));
     if (ret < 0) {
         return ret;
@@ -2689,7 +2678,7 @@ static int make_completely_empty(BlockDriverState *bs)
     cpu_to_be64w(&l1_ofs_rt_ofs_cls.l1_offset, 3 * s->cluster_size);
     cpu_to_be64w(&l1_ofs_rt_ofs_cls.reftable_offset, s->cluster_size);
     cpu_to_be32w(&l1_ofs_rt_ofs_cls.reftable_clusters, 1);
-    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCowHeader, l1_table_offset),
+    ret = bdrv_pwrite_sync(bs->file->bs, offsetof(QCow2Header, l1_table_offset),
                            &l1_ofs_rt_ofs_cls, sizeof(l1_ofs_rt_ofs_cls));
     if (ret < 0) {
         goto fail_broken_refcounts;
@@ -3356,7 +3345,6 @@ static QemuOptsList qcow2_create_opts = {
 BlockDriver bdrv_qcow2 = {
     .format_name        = "qcow2",
     .instance_size      = sizeof(BDRVQcow2State),
-    .bdrv_probe         = qcow2_probe,
     .bdrv_open          = qcow2_open,
     .bdrv_close         = qcow2_close,
     .bdrv_reopen_prepare  = qcow2_reopen_prepare,

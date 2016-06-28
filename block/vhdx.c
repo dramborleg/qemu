@@ -273,25 +273,6 @@ static void vhdx_set_shift_bits(BDRVVHDXState *s)
 }
 
 /*
- * Per the MS VHDX Specification, for every VHDX file:
- *      - The header section is fixed size - 1 MB
- *      - The header section is always the first "object"
- *      - The first 64KB of the header is the File Identifier
- *      - The first uint64 (8 bytes) is the VHDX Signature ("vhdxfile")
- *      - The following 512 bytes constitute a UTF-16 string identifiying the
- *        software that created the file, and is optional and diagnostic only.
- *
- *  Therefore, we probe by looking for the vhdxfile signature "vhdxfile"
- */
-static int vhdx_probe(const uint8_t *buf, int buf_size, const char *filename)
-{
-    if (buf_size >= 8 && !memcmp(buf, "vhdxfile", 8)) {
-        return 100;
-    }
-    return 0;
-}
-
-/*
  * Writes the header to the specified offset.
  *
  * This will optionally read in buffer data from disk (otherwise zero-fill),
@@ -1960,7 +1941,6 @@ static QemuOptsList vhdx_create_opts = {
 static BlockDriver bdrv_vhdx = {
     .format_name            = "vhdx",
     .instance_size          = sizeof(BDRVVHDXState),
-    .bdrv_probe             = vhdx_probe,
     .bdrv_open              = vhdx_open,
     .bdrv_close             = vhdx_close,
     .bdrv_reopen_prepare    = vhdx_reopen_prepare,

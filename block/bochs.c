@@ -26,46 +26,13 @@
 #include "qapi/error.h"
 #include "qemu-common.h"
 #include "block/block_int.h"
+#include "block/bochs.h"
 #include "qemu/module.h"
 #include "qemu/bswap.h"
 
 /**************************************************************/
 
-#define HEADER_MAGIC "Bochs Virtual HD Image"
-#define HEADER_VERSION 0x00020000
-#define HEADER_V1 0x00010000
-#define HEADER_SIZE 512
-
-#define REDOLOG_TYPE "Redolog"
-#define GROWING_TYPE "Growing"
-
 // not allocated: 0xffffffff
-
-// always little-endian
-struct bochs_header {
-    char magic[32];     /* "Bochs Virtual HD Image" */
-    char type[16];      /* "Redolog" */
-    char subtype[16];   /* "Undoable" / "Volatile" / "Growing" */
-    uint32_t version;
-    uint32_t header;    /* size of header */
-
-    uint32_t catalog;   /* num of entries */
-    uint32_t bitmap;    /* bitmap size */
-    uint32_t extent;    /* extent size */
-
-    union {
-        struct {
-            uint32_t reserved;  /* for ??? */
-            uint64_t disk;      /* disk size */
-            char padding[HEADER_SIZE - 64 - 20 - 12];
-        } QEMU_PACKED redolog;
-        struct {
-            uint64_t disk;      /* disk size */
-            char padding[HEADER_SIZE - 64 - 20 - 8];
-        } QEMU_PACKED redolog_v1;
-        char padding[HEADER_SIZE - 64 - 20];
-    } extra;
-} QEMU_PACKED;
 
 typedef struct BDRVBochsState {
     CoMutex lock;
@@ -78,23 +45,6 @@ typedef struct BDRVBochsState {
     uint32_t extent_blocks;
     uint32_t extent_size;
 } BDRVBochsState;
-
-static int bochs_probe(const uint8_t *buf, int buf_size, const char *filename)
-{
-    const struct bochs_header *bochs = (const void *)buf;
-
-    if (buf_size < HEADER_SIZE)
-	return 0;
-
-    if (!strcmp(bochs->magic, HEADER_MAGIC) &&
-	!strcmp(bochs->type, REDOLOG_TYPE) &&
-	!strcmp(bochs->subtype, GROWING_TYPE) &&
-	((le32_to_cpu(bochs->version) == HEADER_VERSION) ||
-	(le32_to_cpu(bochs->version) == HEADER_V1)))
-	return 100;
-
-    return 0;
-}
 
 static int bochs_open(BlockDriverState *bs, QDict *options, int flags,
                       Error **errp)
@@ -112,16 +62,16 @@ static int bochs_open(BlockDriverState *bs, QDict *options, int flags,
         return ret;
     }
 
-    if (strcmp(bochs.magic, HEADER_MAGIC) ||
+    if (strcmp(bochs.magic, BOCHS_HEADER_MAGIC) ||
         strcmp(bochs.type, REDOLOG_TYPE) ||
         strcmp(bochs.subtype, GROWING_TYPE) ||
-	((le32_to_cpu(bochs.version) != HEADER_VERSION) &&
-	(le32_to_cpu(bochs.version) != HEADER_V1))) {
+	((le32_to_cpu(bochs.version) != BOCHS_HEADER_VERSION) &&
+	(le32_to_cpu(bochs.version) != BOCHS_HEADER_V1))) {
         error_setg(errp, "Image not in Bochs format");
         return -EINVAL;
     }
 
-    if (le32_to_cpu(bochs.version) == HEADER_V1) {
+    if (le32_to_cpu(bochs.version) == BOCHS_HEADER_V1) {
         bs->total_sectors = le64_to_cpu(bochs.extra.redolog_v1.disk) / 512;
     } else {
         bs->total_sectors = le64_to_cpu(bochs.extra.redolog.disk) / 512;
@@ -281,7 +231,6 @@ static void bochs_close(BlockDriverState *bs)
 static BlockDriver bdrv_bochs = {
     .format_name	= "bochs",
     .instance_size	= sizeof(BDRVBochsState),
-    .bdrv_probe		= bochs_probe,
     .bdrv_open		= bochs_open,
     .bdrv_co_preadv = bochs_co_preadv,
     .bdrv_close		= bochs_close,

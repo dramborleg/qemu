@@ -44,21 +44,6 @@ typedef struct BDRVCloopState {
     z_stream zstream;
 } BDRVCloopState;
 
-static int cloop_probe(const uint8_t *buf, int buf_size, const char *filename)
-{
-    const char *magic_version_2_0 = "#!/bin/sh\n"
-        "#V2.0 Format\n"
-        "modprobe cloop file=$0 && mount -r -t iso9660 /dev/cloop $1\n";
-    int length = strlen(magic_version_2_0);
-    if (length > buf_size) {
-        length = buf_size;
-    }
-    if (!memcmp(magic_version_2_0, buf, length)) {
-        return 2;
-    }
-    return 0;
-}
-
 static int cloop_open(BlockDriverState *bs, QDict *options, int flags,
                       Error **errp)
 {
@@ -278,7 +263,6 @@ static void cloop_close(BlockDriverState *bs)
 static BlockDriver bdrv_cloop = {
     .format_name    = "cloop",
     .instance_size  = sizeof(BDRVCloopState),
-    .bdrv_probe     = cloop_probe,
     .bdrv_open      = cloop_open,
     .bdrv_co_preadv = cloop_co_preadv,
     .bdrv_close     = cloop_close,

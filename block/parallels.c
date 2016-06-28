@@ -31,6 +31,7 @@
 #include "qapi/error.h"
 #include "qemu-common.h"
 #include "block/block_int.h"
+#include "block/parallels.h"
 #include "sysemu/block-backend.h"
 #include "qemu/module.h"
 #include "qemu/bswap.h"
@@ -38,28 +39,6 @@
 #include "qapi/util.h"
 
 /**************************************************************/
-
-#define HEADER_MAGIC "WithoutFreeSpace"
-#define HEADER_MAGIC2 "WithouFreSpacExt"
-#define HEADER_VERSION 2
-#define HEADER_INUSE_MAGIC  (0x746F6E59)
-
-#define DEFAULT_CLUSTER_SIZE 1048576        /* 1 MiB */
-
-
-// always little-endian
-typedef struct ParallelsHeader {
-    char magic[16]; // "WithoutFreeSpace"
-    uint32_t version;
-    uint32_t heads;
-    uint32_t cylinders;
-    uint32_t tracks;
-    uint32_t bat_entries;
-    uint64_t nb_sectors;
-    uint32_t inuse;
-    uint32_t data_off;
-    char padding[12];
-} QEMU_PACKED ParallelsHeader;
 
 
 typedef enum ParallelsPreallocMode {
@@ -474,7 +453,7 @@ static int parallels_create(const char *filename, QemuOpts *opts, Error **errp)
     total_size = ROUND_UP(qemu_opt_get_size_del(opts, BLOCK_OPT_SIZE, 0),
                           BDRV_SECTOR_SIZE);
     cl_size = ROUND_UP(qemu_opt_get_size_del(opts, BLOCK_OPT_CLUSTER_SIZE,
-                          DEFAULT_CLUSTER_SIZE), BDRV_SECTOR_SIZE);
+                          PARALLELS_DEFAULT_CLUSTER_SIZE), BDRV_SECTOR_SIZE);
 
     ret = bdrv_create_file(filename, opts, &local_err);
     if (ret < 0) {
@@ -501,8 +480,8 @@ static int parallels_create(const char *filename, QemuOpts *opts, Error **errp)
     bat_sectors = (bat_sectors *  cl_size) >> BDRV_SECTOR_BITS;
 
     memset(&header, 0, sizeof(header));
-    memcpy(header.magic, HEADER_MAGIC2, sizeof(header.magic));
-    header.version = cpu_to_le32(HEADER_VERSION);
+    memcpy(header.magic, PARALLELS_HEADER_MAGIC2, sizeof(header.magic));
+    header.version = cpu_to_le32(PARALLELS_HEADER_VERSION);
     /* don't care much about geometry, it is not used on image level */
     header.heads = cpu_to_le32(16);
     header.cylinders = cpu_to_le32(total_size / BDRV_SECTOR_SIZE / 16 / 32);
@@ -536,24 +515,6 @@ exit:
 }
 
 
-static int parallels_probe(const uint8_t *buf, int buf_size,
-                           const char *filename)
-{
-    const ParallelsHeader *ph = (const void *)buf;
-
-    if (buf_size < sizeof(ParallelsHeader)) {
-        return 0;
-    }
-
-    if ((!memcmp(ph->magic, HEADER_MAGIC, 16) ||
-           !memcmp(ph->magic, HEADER_MAGIC2, 16)) &&
-           (le32_to_cpu(ph->version) == HEADER_VERSION)) {
-        return 100;
-    }
-
-    return 0;
-}
-
 static int parallels_update_header(BlockDriverState *bs)
 {
     BDRVParallelsState *s = bs->opaque;
@@ -583,13 +544,13 @@ static int parallels_open(BlockDriverState *bs, QDict *options, int flags,
 
     bs->total_sectors = le64_to_cpu(ph.nb_sectors);
 
-    if (le32_to_cpu(ph.version) != HEADER_VERSION) {
+    if (le32_to_cpu(ph.version) != PARALLELS_HEADER_VERSION) {
         goto fail_format;
     }
-    if (!memcmp(ph.magic, HEADER_MAGIC, 16)) {
+    if (!memcmp(ph.magic, PARALLELS_HEADER_MAGIC, 16)) {
         s->off_multiplier = 1;
         bs->total_sectors = 0xffffffff & bs->total_sectors;
-    } else if (!memcmp(ph.magic, HEADER_MAGIC2, 16)) {
+    } else if (!memcmp(ph.magic, PARALLELS_HEADER_MAGIC2, 16)) {
         s->off_multiplier = le32_to_cpu(ph.tracks);
     } else {
         goto fail_format;
@@ -644,7 +605,7 @@ static int parallels_open(BlockDriverState *bs, QDict *options, int flags,
         }
     }
 
-    if (le32_to_cpu(ph.inuse) == HEADER_INUSE_MAGIC) {
+    if (le32_to_cpu(ph.inuse) == PARALLELS_HEADER_INUSE_MAGIC) {
         /* Image was not closed correctly. The check is mandatory */
         s->header_unclean = true;
         if ((flags & BDRV_O_RDWR) && !(flags & BDRV_O_CHECK)) {
@@ -681,7 +642,7 @@ static int parallels_open(BlockDriverState *bs, QDict *options, int flags,
     }
 
     if (flags & BDRV_O_RDWR) {
-        s->header->inuse = cpu_to_le32(HEADER_INUSE_MAGIC);
+        s->header->inuse = cpu_to_le32(PARALLELS_HEADER_INUSE_MAGIC);
         ret = parallels_update_header(bs);
         if (ret < 0) {
             goto fail;
@@ -739,7 +700,7 @@ static QemuOptsList parallels_create_opts = {
             .name = BLOCK_OPT_CLUSTER_SIZE,
             .type = QEMU_OPT_SIZE,
             .help = "Parallels image cluster size",
-            .def_value_str = stringify(DEFAULT_CLUSTER_SIZE),
+            .def_value_str = stringify(PARALLELS_DEFAULT_CLUSTER_SIZE),
         },
         { /* end of list */ }
     }
@@ -748,7 +709,6 @@ static QemuOptsList parallels_create_opts = {
 static BlockDriver bdrv_parallels = {
     .format_name	= "parallels",
     .instance_size	= sizeof(BDRVParallelsState),
-    .bdrv_probe		= parallels_probe,
     .bdrv_open		= parallels_open,
     .bdrv_close		= parallels_close,
     .bdrv_co_get_block_status = parallels_co_get_block_status,

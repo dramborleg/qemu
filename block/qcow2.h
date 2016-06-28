@@ -25,6 +25,8 @@
 #ifndef BLOCK_QCOW2_H
 #define BLOCK_QCOW2_H
 
+#include "block/block.h"
+#include "block/snapshot.h"
 #include "crypto/cipher.h"
 #include "qemu/coroutine.h"
 
@@ -32,7 +34,7 @@
 //#define DEBUG_ALLOC2
 //#define DEBUG_EXT
 
-#define QCOW_MAGIC (('Q' << 24) | ('F' << 16) | ('I' << 8) | 0xfb)
+#define QCOW2_MAGIC (('Q' << 24) | ('F' << 16) | ('I' << 8) | 0xfb)
 
 #define QCOW_CRYPT_NONE 0
 #define QCOW_CRYPT_AES  1
@@ -98,7 +100,7 @@
 #define QCOW2_OPT_REFCOUNT_CACHE_SIZE "refcount-cache-size"
 #define QCOW2_OPT_CACHE_CLEAN_INTERVAL "cache-clean-interval"
 
-typedef struct QCowHeader {
+typedef struct QCow2Header {
     uint32_t magic;
     uint32_t version;
     uint64_t backing_file_offset;
@@ -120,7 +122,7 @@ typedef struct QCowHeader {
 
     uint32_t refcount_order;
     uint32_t header_length;
-} QEMU_PACKED QCowHeader;
+} QEMU_PACKED QCow2Header;
 
 typedef struct QEMU_PACKED QCowSnapshotHeader {
     /* header is 8 byte aligned */
